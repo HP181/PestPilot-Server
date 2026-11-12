@@ -1,0 +1,136 @@
+// use prisma-8
+
+enum Role {
+  admin
+  property_manager
+  vendor
+  resident
+}
+
+enum WorkOrderStatus {
+  submitted
+  assigned
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+model Organization {
+  id          Int          @id @default(autoincrement())
+  name        String
+  memberships Membership[]
+  properties  Property[]
+  workOrders  WorkOrder[]
+  createdAt   DateTime     @default(now()) @onCreate(now())
+  updatedAt   temporal.UpdatedAt
+}
+
+model User {
+  id                  Int              @id @default(autoincrement())
+  email               String           @unique
+  name                String?
+  passwordHash        String?
+  memberships         Membership[]
+  identities          Identity[]
+  refreshTokens       RefreshToken[]
+  workOrdersRequested WorkOrder[]      @relation("RequestedBy")
+  workOrdersAssigned  WorkOrder[]      @relation("AssignedVendor")
+  workOrderEvents     WorkOrderEvent[]
+  createdAt           DateTime         @default(now()) @onCreate(now())
+  updatedAt           temporal.UpdatedAt
+}
+
+model Identity {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id])
+  provider       String
+  providerUserId String
+  email          String?
+  createdAt      DateTime @default(now()) @onCreate(now())
+
+  @@unique([provider, providerUserId])
+}
+
+model Membership {
+  id     Int          @id @default(autoincrement())
+  userId Int
+  user   User         @relation(fields: [userId], references: [id])
+  orgId  Int
+  org    Organization @relation(fields: [orgId], references: [id])
+  role   Role
+
+  @@unique([userId, orgId])
+}
+
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id])
+  familyId   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now()) @onCreate(now())
+
+  @@index([familyId])
+}
+
+model Property {
+  id         Int          @id @default(autoincrement())
+  orgId      Int
+  org        Organization @relation(fields: [orgId], references: [id])
+  name       String
+  address    String
+  units      Int          @default(1)
+  workOrders WorkOrder[]
+  createdAt  DateTime     @default(now()) @onCreate(now())
+  updatedAt  temporal.UpdatedAt
+
+  @@index([orgId])
+}
+
+model WorkOrder {
+  id               Int             @id @default(autoincrement())
+  orgId            Int
+  org              Organization    @relation(fields: [orgId], references: [id])
+  propertyId       Int
+  property         Property        @relation(fields: [propertyId], references: [id])
+  unit             String?
+  requestedById    Int
+  requestedBy      User            @relation("RequestedBy", fields: [requestedById], references: [id])
+  assignedVendorId Int?
+  assignedVendor   User?           @relation("AssignedVendor", fields: [assignedVendorId], references: [id])
+  pestType         String
+  description      String?
+  status           WorkOrderStatus @default(submitted)
+  priority         Priority        @default(medium)
+  events           WorkOrderEvent[]
+  createdAt        DateTime        @default(now()) @onCreate(now())
+  updatedAt        temporal.UpdatedAt
+
+  @@index([orgId])
+  @@index([status])
+}
+
+model WorkOrderEvent {
+  id          Int       @id @default(autoincrement())
+  workOrderId Int
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  actorId     Int
+  actor       User      @relation(fields: [actorId], references: [id])
+  type        String
+  note        String?
+  createdAt   DateTime  @default(now()) @onCreate(now())
+
+  @@index([workOrderId])
+}
